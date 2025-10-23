@@ -13,7 +13,7 @@ const pool = mysql.createPool({
 
 // Root route
 app.get('/', (req, res) => {
-  res.send('Prototype 1: Express + MariaDB live 🚀');
+  res.send('Prototype 1: Express + MariaDB live ');
 });
 
 // Health check route
