@@ -1,19 +1,35 @@
+//using parametrized queries
+
+require('dotenv').config();
+
 const express = require('express');
 const mysql = require('mysql2/promise');
+
 const app = express();
 app.use(express.json());
 
-// Database connection pool
+console.log('--ENV--');
+console.log('DB HOST: ', process.env.DB_HOST);
+console.log('port:', process.env.DONATIONS_PORT);
+console.log('user: ', process.env.DB_USER);
+console.log('name: ', process.env.DB_NAME);
+
+// Database connection pool (for multiple reusable connections)
+//using bc of multiple HTTP donor requests at same time to avoid clog
 const pool = mysql.createPool({
-  host: '127.0.0.1',
-  user: 'malky',
-  password: '',
-  database: 'donationsdb',
+  host: process.env.DB_HOST,
+  port: Number(process.env.DONATIONS_PORT),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+  waitForConnections: true, //preventing 
+  connectLimit:10,
+  queueLimit:100
 });
 
 // Root route
 app.get('/', (req, res) => {
-  res.send('Prototype 1: Express + MariaDB live ');
+  res.send('Prototype 1: Express + MariaDB live');
 });
 
 // Health check route
