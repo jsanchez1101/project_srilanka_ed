@@ -1,4 +1,4 @@
--- schema (stripe checkout intake + webhook-first)
+-- schema (stripe checkout intake + webhook)
 
 create database if not exists donationsdb
   default character set utf8mb4
