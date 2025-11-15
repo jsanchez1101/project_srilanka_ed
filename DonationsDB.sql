@@ -1,4 +1,4 @@
--- schema (stripe checkout intake + webhook)
+-- schema (stripe checkout intake + webhook-first; off-platform payouts tracked internally)
 
 create database if not exists donationsdb
   default character set utf8mb4
@@ -17,9 +17,9 @@ create table if not exists donor (
   public_opt_in   tinyint(1) not null default 0,
   created_at      timestamp default current_timestamp,
   updated_at      timestamp default current_timestamp on update current_timestamp,
-  key idx_donor_email (email),
   constraint chk_donor_country_len check (country is null or char_length(country) = 2)
 ) engine=innodb default charset=utf8mb4;
+
 
 -- recipients. stripe_account_id stays null for sri lankans
 create table if not exists recipient (
@@ -32,6 +32,22 @@ create table if not exists recipient (
   updated_at        timestamp default current_timestamp on update current_timestamp,
   constraint chk_recipient_stripe_guard check (charges_enabled = 0 or stripe_account_id is not null)
 ) engine=innodb default charset=utf8mb4;
+
+-- 
+create table if not exists recipient_payout_details (
+  recipient_id      char(36) primary key,
+  wise_profile_id   varchar(64) null,
+  bank_account_name varchar(100) null,
+  bank_account_no   varchar(64) null,
+  bank_code         varchar(20) null,        -- optional for Sri Lanka banks
+  swift_code        varchar(20) null,
+  created_at        timestamp default current_timestamp,
+  updated_at        timestamp default current_timestamp on update current_timestamp,
+
+  constraint fk_rpd_recipient
+    foreign key (recipient_id) references recipient(recipient_id)
+    on update cascade on delete cascade
+);
 
 -- payments are written/updated by webhooks (checkout.session.completed)
 create table if not exists payment (
@@ -61,28 +77,6 @@ create table if not exists payment (
 
   constraint chk_payment_amount_pos check (amount_minor > 0),
   constraint chk_payment_currency_len check (char_length(currency) = 3)
-) engine=innodb default charset=utf8mb4;
-
--- subscriptions (will implement later)
-create table if not exists subscription (
-  subscription_id        bigint unsigned primary key auto_increment,
-  donor_id               char(36) not null,
-  stripe_subscription_id varchar(64) not null unique,
-  price_currency         char(3) not null,
-  price_amount_minor     int unsigned not null,
-  status                 enum('trial','active','past_due','canceled','unpaid') not null,
-  started_at             timestamp default current_timestamp,
-  updated_at             timestamp default current_timestamp on update current_timestamp,
-
-  constraint fk_sub_donor
-    foreign key (donor_id) references donor(donor_id)
-    on update cascade on delete restrict,
-
-  key idx_sub_donor (donor_id),
-  key idx_sub_status (status),
-
-  constraint chk_sub_currency_len check (char_length(price_currency) = 3),
-  constraint chk_sub_amount_pos check (price_amount_minor > 0)
 ) engine=innodb default charset=utf8mb4;
 
 -- raw stripe events; unique(event_id) = idempotency guard
@@ -121,7 +115,7 @@ create table if not exists transaction_trail (
   constraint chk_trail_currency_len check (char_length(currency) = 3)
 ) engine=innodb default charset=utf8mb4;
 
--- off-platform payouts you execute (bank/wise/other)
+-- possible off-platform payouts  (bank/wise/other)
 create table if not exists payout (
   payout_id     bigint unsigned primary key auto_increment,
   recipient_id  char(36) not null,
@@ -142,20 +136,10 @@ create table if not exists payout (
   constraint chk_payout_amount_pos check (amount_minor > 0)
 ) engine=innodb default charset=utf8mb4;
 
--- optional: map multiple incoming payments to one payout
-create table if not exists payout_payment (
-  payout_id   bigint unsigned not null,
-  payment_id  bigint unsigned not null,
-  primary key (payout_id, payment_id),
-  constraint fk_pp_payout  foreign key (payout_id)  references payout(payout_id)
-    on update cascade on delete cascade,
-  constraint fk_pp_payment foreign key (payment_id) references payment(payment_id)
-    on update cascade on delete cascade
-) engine=innodb default charset=utf8mb4;
 
 -- helpful secondary indexes
 create index idx_trail_payment_created on transaction_trail(payment_id, created_at);
-create index idx_email_created on email_event(created_at);
+create index idx_payment_status_created on payment(status, created_at);
 
 -- convenience view: donor + (optional) recipient
 drop view if exists v_payments_enriched;
@@ -176,27 +160,107 @@ from payment p
 join donor d on d.donor_id = p.donor_id
 left join recipient r on r.recipient_id = p.recipient_id;
 
--- sanity queries after a test checkout + webhook
-select webhook_event_id, stripe_event_id, type, received_at
-from webhook_event
-order by webhook_event_id desc
-limit 5;
+-- analytics friendly layer below (data warehouse populated via ETL from OLTP). WILL NOT BE DONE IF TIME BECOMES A CRUNCH
 
-select donor_id, fullname, email, created_at
-from donor
-order by created_at desc
-limit 5;
+-- date dimension (used by facts for fast time-based slicing)
+create table if not exists dim_date (
+  date_key      int primary key,      -- yyyymmdd (e.g., 20251114)
+  full_date     date not null,
+  year          smallint not null,
+  quarter       tinyint not null,
+  month         tinyint not null,
+  month_name    varchar(15) not null,
+  day           tinyint not null,
+  day_of_week   tinyint not null,     -- 1=Monday .. 7=Sunday
+  week_of_year  tinyint not null
+) engine=innodb default charset=utf8mb4;
 
-select payment_id, donor_id, amount_minor, currency, status,
-       stripe_payment_intent_id, stripe_checkout_id, created_at
-from payment
-order by payment_id desc
-limit 5;
+-- donor dimension (snapshot for analytics; avoids joining OLTP tables for every query)
+create table if not exists dim_donor (
+  dim_donor_id  int unsigned primary key auto_increment,
+  donor_id      char(36) not null,          -- natural key from OLTP
+  email         varchar(255) not null,
+  fullname      varchar(200) not null,
+  country       varchar(2) null,
+  first_donation_date_key int null,         -- FK to dim_date.date_key in ETL
+  created_at    timestamp default current_timestamp,
 
-select entry_id, payment_id, entry_type, amount_minor, currency, created_at
-from transaction_trail
-order by entry_id desc
-limit 5;
+  unique key uq_dim_donor_donor_id (donor_id)
+) engine=innodb default charset=utf8mb4;
 
-select * from v_payments_enriched order by payment_id desc limit 5;
+-- recipient dimension
+create table if not exists dim_recipient (
+  dim_recipient_id int unsigned primary key auto_increment,
+  recipient_id     char(36) not null,       -- natural key from OLTP
+  email            varchar(100) not null,
+  full_name        varchar(100) not null,
+  country          varchar(2) null,
+  stripe_account_id varchar(64) null,
+  created_at       timestamp default current_timestamp,
 
+  unique key uq_dim_recipient_recipient_id (recipient_id)
+) engine=innodb default charset=utf8mb4;
+
+-- donation fact table (one row per successful payment, typically)
+create table if not exists fact_donation (
+  fact_donation_id   bigint unsigned primary key auto_increment,
+  payment_id         bigint unsigned not null,  -- link back to OLTP payment
+  dim_donor_id       int unsigned not null,
+  dim_recipient_id   int unsigned null,
+  donation_date_key  int not null,             -- from dim_date
+  currency           char(3) not null,
+  amount_minor       bigint unsigned not null,
+  amount_minor_usd   bigint unsigned null,
+  status             enum('pending','success','failed','refunded') not null,
+
+  key idx_fact_donation_donor (dim_donor_id),
+  key idx_fact_donation_recipient (dim_recipient_id),
+  key idx_fact_donation_date (donation_date_key),
+  key idx_fact_donation_status (status),
+
+  constraint fk_fact_donation_payment
+    foreign key (payment_id) references payment(payment_id)
+      on update cascade on delete cascade,
+  constraint fk_fact_donation_dim_donor
+    foreign key (dim_donor_id) references dim_donor(dim_donor_id)
+      on update cascade on delete restrict,
+  constraint fk_fact_donation_dim_recipient
+    foreign key (dim_recipient_id) references dim_recipient(dim_recipient_id)
+      on update cascade on delete set null,
+  constraint fk_fact_donation_dim_date
+    foreign key (donation_date_key) references dim_date(date_key)
+      on update cascade on delete restrict
+) engine=innodb default charset=utf8mb4;
+
+-- payout fact table (total funds out per payout event)
+create table if not exists fact_payout (
+  fact_payout_id     bigint unsigned primary key auto_increment,
+  payout_id          bigint unsigned not null,   -- link back to OLTP payout
+  dim_recipient_id   int unsigned not null,
+  payout_date_key    int not null,
+  currency           char(3) not null,
+  amount_minor       bigint unsigned not null,
+  method             enum('wire','ach','wise','other') not null,
+  status             enum('initiated','sent','failed','reconciled') not null,
+
+  key idx_fact_payout_recipient (dim_recipient_id),
+  key idx_fact_payout_date (payout_date_key),
+  key idx_fact_payout_status (status),
+
+  constraint fk_fact_payout_payout
+    foreign key (payout_id) references payout(payout_id)
+      on update cascade on delete cascade,
+  constraint fk_fact_payout_dim_recipient
+    foreign key (dim_recipient_id) references dim_recipient(dim_recipient_id)
+      on update cascade on delete restrict,
+  constraint fk_fact_payout_dim_date
+    foreign key (payout_date_key) references dim_date(date_key)
+      on update cascade on delete restrict
+) engine=innodb default charset=utf8mb4;
+
+-- dividing stripe and payhere payments
+alter table payment
+  add column provider enum('stripe','payhere') not null default 'stripe';
+
+alter table webhook_event
+  add column provider enum('stripe','payhere') not null default 'stripe';
