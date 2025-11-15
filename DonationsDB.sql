@@ -115,7 +115,7 @@ create table if not exists transaction_trail (
   constraint chk_trail_currency_len check (char_length(currency) = 3)
 ) engine=innodb default charset=utf8mb4;
 
--- possible off-platform payouts  (bank/wise/other)
+-- possible off-platform payouts  (bank/other)
 create table if not exists payout (
   payout_id     bigint unsigned primary key auto_increment,
   recipient_id  char(36) not null,
