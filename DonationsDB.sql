@@ -79,7 +79,7 @@ create table if not exists payment (
   constraint chk_payment_currency_len check (char_length(currency) = 3)
 ) engine=innodb default charset=utf8mb4;
 
--- raw stripe events; unique(event_id) = idempotency guard
+-- raw stripe events; unique(event_id) = idempotency guard(only one execution)
 create table if not exists webhook_event (
   webhook_event_id bigint unsigned primary key auto_increment,
   stripe_event_id  varchar(64) not null unique,
