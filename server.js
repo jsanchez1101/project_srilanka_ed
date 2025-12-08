@@ -38,8 +38,18 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   }
 });
 
+app.use(cors({
+  origin: [
+    "https://final-sl.onrender.com",    
+    "https://project-srilanka-ed.onrender.com",
+    "http://localhost:5500"              // optional local testing
+  ]
+}));
+
+
 // AFTER webhook, enable JSON for normal routes
 app.use(express.json());
+
 
 console.log('--ENV--');
 console.log('DB HOST: ', process.env.DB_HOST);
