@@ -9,9 +9,7 @@ const cors = require('cors');
 
 const app = express();
 
-/* -------------------------------------------------
-   1. CORS (enable browser donations)
----------------------------------------------------*/
+ //  1. CORS (enable browser donations)
 app.use(cors({
   origin: [
     "https://final-sl.onrender.com",
