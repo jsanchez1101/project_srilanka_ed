@@ -1,10 +1,10 @@
-
 {
   "name": "malky-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Malky donations backend (Express + MySQL + Stripe)",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,6 +14,7 @@
   "dependencies": {
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "mysql2": "^3.15.2"
+    "mysql2": "^3.15.2",
+    "stripe": "^16.0.0"
   }
 }
