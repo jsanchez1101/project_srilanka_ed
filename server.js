@@ -9,7 +9,7 @@ const cors = require('cors');
 
 const app = express();
 
- //  1. CORS (enable browser donations)
+ //  CORS (enable browser donations)
 app.use(cors({
   origin: [
     "https://final-sl.onrender.com",
@@ -18,9 +18,7 @@ app.use(cors({
   ]
 }));
 
-/* -------------------------------------------------
-   2. STRIPE WEBHOOK (RAW BODY — MUST BE FIRST)
----------------------------------------------------*/
+ //  STRIPE WEBHOOK (RAW BODY — MUST BE FIRST)
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -51,9 +49,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   }
 });
 
-/* -------------------------------------------------
-   3. JSON BODY PARSER (AFTER WEBHOOK)
----------------------------------------------------*/
+   //JSON BODY PARSER (AFTER WEBHOOK)
 app.use(express.json());
 
 console.log("--ENV--");
@@ -62,9 +58,8 @@ console.log("PORT:", process.env.DONATIONS_PORT);
 console.log("USER:", process.env.DB_USER);
 console.log("NAME:", process.env.DB_NAME);
 
-/* -------------------------------------------------
-   4. MYSQL CONNECTION POOL
----------------------------------------------------*/
+ // MYSQL CONNECTION POOL
+
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   port: Number(process.env.DONATIONS_PORT),
@@ -76,9 +71,8 @@ const pool = mysql.createPool({
   queueLimit: 100
 });
 
-/* -------------------------------------------------
-   5. HEALTH + SIMPLE ROUTES
----------------------------------------------------*/
+   // HEALTH + SIMPLE ROUTES
+
 app.get('/', (req, res) => {
   res.send('Prototype 1: Express + MariaDB live');
 });
@@ -92,9 +86,8 @@ app.get('/health', async (_req, res) => {
   }
 });
 
-/* -------------------------------------------------
-   6. GET LATEST DONORS (OPTIONAL)
----------------------------------------------------*/
+   // GET LATEST DONORS (OPTIONAL)
+
 app.get('/donors', async (_req, res) => {
   const [rows] = await pool.query(
     "SELECT fullname, email, country, created_at FROM donor ORDER BY created_at DESC LIMIT 5"
@@ -102,9 +95,7 @@ app.get('/donors', async (_req, res) => {
   res.json(rows);
 });
 
-/* -------------------------------------------------
-   7. STRIPE CHECKOUT SESSION
----------------------------------------------------*/
+//   STRIPE CHECKOUT SESSION
 app.post('/create-checkout-session', async (req, res) => {
   try {
     const { amount, campaign_id, recipient_id } = req.body;
@@ -139,9 +130,7 @@ app.post('/create-checkout-session', async (req, res) => {
   }
 });
 
-/* -------------------------------------------------
-   8. HANDLE CHECKOUT COMPLETION (DATABASE WRITES)
----------------------------------------------------*/
+//   HANDLE CHECKOUT COMPLETION (DATABASE WRITES)
 async function handleCheckoutCompleted(session, eventId) {
   const conn = await pool.getConnection();
 
@@ -245,9 +234,7 @@ async function handleCheckoutCompleted(session, eventId) {
   }
 }
 
-/* -------------------------------------------------
-   9. START SERVER (RENDER COMPATIBLE)
----------------------------------------------------*/
+//   START SERVER (RENDER COMPATIBLE)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`Server running on port ${PORT}`)
