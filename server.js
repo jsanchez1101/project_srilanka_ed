@@ -109,7 +109,8 @@ app.post('/create-checkout-session', async (req, res) => {
         {
           price_data: {
             currency: "usd",
-            product_data: { name: "Donation to Sri Lankan Education" },
+            product_data: { name: "Donation to Sri Lankan Education",
+                          description: "Your contribution supports the development of Sri Lankan children from both rural and urban areas."},
             unit_amount: amountCents,
           },
           quantity: 1,
