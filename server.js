@@ -109,7 +109,7 @@ app.post('/create-checkout-session', async (req, res) => {
         {
           price_data: {
             currency: "usd",
-            product_data: { name: "Malky Donation" },
+            product_data: { name: "Donation to Sri Lankan Education" },
             unit_amount: amountCents,
           },
           quantity: 1,
