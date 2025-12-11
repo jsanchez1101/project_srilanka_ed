@@ -116,8 +116,8 @@ app.post('/create-checkout-session', async (req, res) => {
           quantity: 1,
         }
       ],
-      success_url: "https://example.com/success",
-      cancel_url: "https://example.com/cancel",
+      success_url: "https://final-sl.onrender.com/donate.html",
+      cancel_url: "https://final-sl.onrender.com/donate.html",
       metadata: {
         campaign_id: campaign_id || "1",
         recipient_id: recipient_id || "some-uuid"
