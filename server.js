@@ -17,7 +17,7 @@ app.use(cors({
   ]
 }));
 
- //  STRIPE WEBHOOK (RAW BODY — MUST BE FIRST)
+ //  stripe webhook (raw body)
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
