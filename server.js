@@ -1,5 +1,5 @@
 //using parametrized queries
-
+<script>
 require('dotenv').config();
 
 const express = require('express');
@@ -240,3 +240,11 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`Server running on port ${PORT}`)
 );
+</script>
+<!DOCTYPE HTML>
+<html>
+ <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <button class="donation-amount border-2 border-gray-300 text-lg font-semibold py-4 rounded-lg hover:bg-blue-100 hover:border-blue-500 transition-colors"></button>
+
+ </html>
+
