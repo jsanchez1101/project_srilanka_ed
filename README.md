@@ -7,3 +7,5 @@ Designed + deployed a normalized MySQL database on AWS RDS to track donors, paym
 Built using Node.JS and Express to handle Stripe checkout, webhook verification, and idempotent payment processing. Backend hosted on render.
 Integrated frontend donation flows with backend APIs & implemented transparency features through structured data storage and reporting.
 
+## Note:
+Due to financial constraints, the website was unfortunately shut down and put out of order.
